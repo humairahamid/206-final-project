@@ -42,13 +42,27 @@ def read_spotify_data():
 
     # Get ID
     # https://open.spotify.com/playlist/1GVezl4vnm9QuMQs5Wg3oa
-    # 37i9dQZF1EUMDoJuT8yJsl
 
     # actual GET request with proper header
     r = requests.get(SPOTIFY_BASE_URL + 'playlists/' + "1GVezl4vnm9QuMQs5Wg3oa" + "/tracks", headers=spotify_headers)
     data = r.json()
 
     return data
+
+def make_albums_table(cur, conn):
+    albums = ["Taylor Swift", "Fearless (Taylor's Version)", "Speak Now", "Speak Now (Deluxe Edition)",
+    "Red (Taylor's Version)", "1989", "1989 (Deluxe Edition)", "reputation", "Lover",
+    "folklore", "folklore (deluxe edition)", "evermore",
+    "evermore (deluxe edition)", "Midnights", "Midnights (3am Edition)"]
+
+    cur.execute("DROP TABLE IF EXISTS Albums") 
+    cur.execute("CREATE TABLE IF NOT EXISTS Albums (id INTEGER, name TEXT)")
+
+    for x in range(len(albums)):
+        cur.execute("INSERT OR IGNORE INTO Albums (id, name) VALUES (?,?)", (x, albums[x]))
+    
+    conn.commit()
+    print("Albums table created") 
 
 def make_aayana_table(data, cur, conn):
     cur.execute("DROP TABLE IF EXISTS AayanasTSSongs") 
@@ -76,9 +90,6 @@ def make_aayana_table(data, cur, conn):
 
 """
 LASTFM DATA
-
-name, listeners, playcount, summary 
-
 """
 
 def read_lastfm_data():
@@ -86,6 +97,10 @@ def read_lastfm_data():
     page = requests.get(url)
     data = page.json()
     print(data)
+
+"""
+GENIUS DATA
+"""
 
 def read_genius_data():
     url = "https://music.apple.com/us/artist/taylor-swift/159260351"
@@ -96,7 +111,8 @@ def read_genius_data():
 
 def main():
     spotify_data = read_spotify_data()
-    scur, sconn = open_database('music.db')
-    make_aayana_table(spotify_data, scur, sconn)
+    cur, conn = open_database('music.db')
+    make_albums_table(cur, conn)
+    make_aayana_table(spotify_data, cur, conn)
 
 main()
