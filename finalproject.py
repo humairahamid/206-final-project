@@ -31,7 +31,7 @@ SPOTIFY DATA
 API
 
 """
-def read_spotify_data():
+def read_spotify_data(uri):
     SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/api/token'
 
     # POST
@@ -58,7 +58,7 @@ def read_spotify_data():
     # https://open.spotify.com/playlist/1GVezl4vnm9QuMQs5Wg3oa
 
     # actual GET request with proper header
-    r = requests.get(SPOTIFY_BASE_URL + 'playlists/' + "1GVezl4vnm9QuMQs5Wg3oa" + "/tracks", headers=spotify_headers)
+    r = requests.get(SPOTIFY_BASE_URL + 'playlists/' + uri + "/tracks", headers=spotify_headers)
     data = r.json()
 
     return data
@@ -104,11 +104,10 @@ def make_aayana_table(data, cur, conn):
 
     conn.commit() 
     print(count, "tracks added to AayanasTSSongs") 
- 
 
 """
 
-GAWKER DATA
+WEBSITE DATA
 
 Website
 
@@ -151,7 +150,7 @@ def make_website_table(data, cur, conn):
             if item.lower() in album_id:
                 cur.execute("SELECT id FROM Albums WHERE name = ?", (album_id,))
                 album_id = cur.fetchall()
-                if album_id and count < 100:
+                if album_id: # we're just looking at top 100
                     cur.execute("INSERT OR IGNORE INTO WebsiteRankings (track_name, album_id) VALUES (?, ?)", (track_name.lower(), album_id[0][0]))
                     count += 1
     
@@ -159,16 +158,62 @@ def make_website_table(data, cur, conn):
     
     conn.commit()
 
+"""
+
+LASTFM DATA
+
+Extra Credit API
+
+"""
+
+def read_lastfm_data():
+    r = requests.get("https://ws.audioscrobbler.com/2.0/?method=artist.gettoptracks&artist=Taylor+Swift&api_key=" + LASTFM_API_key + "&limit=150&format=json")
+    data = r.json()
+    return data
+
+def make_last_fm_table(data, cur, conn):
+    cur.execute("DROP TABLE IF EXISTS LastfmRankings") 
+    cur.execute("CREATE TABLE IF NOT EXISTS LastfmRankings (track_name TEXT, playcount INTEGER, album_id INTEGER)") 
+
+    count = 0
+
+    for song in data["toptracks"]["track"]:
+
+        if "(" in song["name"]:
+            index = song["name"].find("(")
+            track_name = (song["name"].lower())[:index].strip()
+        else:
+            track_name = song["name"].lower()
+        
+        playcount = song["playcount"]
+        album_id = ""
+
+        cur.execute("SELECT album_id FROM WebsiteRankings WHERE track_name = ?", (track_name,))
+        album_id = cur.fetchall()
+        if album_id:
+            cur.execute("INSERT OR IGNORE INTO LastfmRankings (track_name, playcount, album_id) VALUES (?, ?, ?)", (track_name.lower(), playcount, album_id[0][0]))
+            count += 1
+        
+        #print(track_name, playcount)
+    
+    print(count, "songs added to LastfmRankings")
+
+
+
+    conn.commit()
+
 
 def main():
-    spotify_data = read_spotify_data()
-    website_data = read_website_data()
     cur, conn = open_database('music.db')
+
+    spotify_data = read_spotify_data("1GVezl4vnm9QuMQs5Wg3oa")
+    website_data = read_website_data()
+    lastfm_data = read_lastfm_data()
 
     make_albums_table(cur, conn)
     make_aayana_table(spotify_data, cur, conn)
     make_website_table(website_data, cur, conn)
-
+    make_last_fm_table(lastfm_data, cur, conn)
 
 
 main()
