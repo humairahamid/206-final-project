@@ -259,9 +259,12 @@ def read_lastfm_data():
     return data
 
 def make_last_fm_table(data, cur, conn):
-    cur.execute("CREATE TABLE IF NOT EXISTS LastfmRankings (track_name TEXT UNIQUE, playcount INTEGER, album_id INTEGER)") 
+    cur.execute("CREATE TABLE IF NOT EXISTS LastfmRankings (track_name TEXT, playcount INTEGER, album_id INTEGER)") 
     
     cur.execute("SELECT COUNT(*) as row_count FROM LastfmRankings")
+
+    limit = 25
+
     row_count = cur.fetchall()[0][0]
     print(row_count, "rows in LastfmRankings")
     if row_count < 25 and row_count >= 0:
@@ -272,14 +275,16 @@ def make_last_fm_table(data, cur, conn):
         newdata = data["toptracks"]["track"][row_count:75]
     elif row_count < 100 and row_count >= 75:
         newdata = data["toptracks"]["track"][row_count:100]
+        limit = 100 - row_count
     else:
         print("0 new tracks added to LastfmRankings") 
         return None
 
     count = 0
-    limit = 0
+    i = 0
+    print(len(newdata))
     
-    while limit < 25:
+    while i < len(newdata):
         for song in newdata:
 
             if "(" in song["name"]:
@@ -287,19 +292,23 @@ def make_last_fm_table(data, cur, conn):
                 track_name = (song["name"].lower())[:index].strip()
             else:
                 track_name = song["name"].lower()
-            
-            playcount = song["playcount"]
 
-            cur.execute("SELECT album_id FROM WebsiteRankings WHERE track_name = ?", (track_name,))
+            playcount = song["playcount"]
+            #print(track_name, playcount)
+
+            cur.execute("SELECT album_id FROM Discography WHERE track_name = ?", (track_name,))
             album_id = cur.fetchall()
+            print(album_id)
             if album_id:
                 cur.execute("INSERT OR IGNORE INTO LastfmRankings (track_name, playcount, album_id) VALUES (?, ?, ?)", (track_name.lower(), playcount, album_id[0][0]))
+                #count += 1
             else:
                 cur.execute("INSERT OR IGNORE INTO LastfmRankings (track_name, playcount, album_id) VALUES (?, ?, ?)", (track_name.lower(), playcount, 10))
             
             count += 1
-            limit += 1
             #print((track_name.lower(), playcount, album_id[0][0]))
+
+            i += 1
         
         #print(track_name, playcount)
     
@@ -321,7 +330,7 @@ def main():
     make_aayana_table(spotify_data, cur, conn)
     make_website_table(website_data, cur, conn)
     make_discography_table(website_data, cur, conn)
-    #make_last_fm_table(lastfm_data, cur, conn)
+    make_last_fm_table(lastfm_data, cur, conn)
 
 
 main()
