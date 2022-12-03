@@ -12,10 +12,10 @@ SPOTIFY_CLIENT_SECRET = 'bb1b23ffebfc46cb863f28d9a410fedd'
 LASTFM_API_key = '6580d4a5940a4714ed0990d3bc4083a2'
 LASTFM_Shared_secret = '10f7e2fc26589318d0adad5a4c612e55'
 
-albums = ["Taylor Swift", "Fearless", "Speak Now",
-    "Red", "1989", "reputation", "Lover",
+albums = ["taylor swift", "fearless", "speak now",
+    "red", "1989", "reputation", "lover",
     "folklore",
-    "evermore", "Midnights", "no album"]
+    "evermore", "midnights", "no album"]
 
 def open_database(db_name):
     path = os.path.dirname(os.path.abspath(__file__))
@@ -75,24 +75,39 @@ def make_albums_table(cur, conn):
     print("Albums table created") 
 
 def make_aayana_table(data, cur, conn):
-    cur.execute("DROP TABLE IF EXISTS AayanasTSSongs") 
     cur.execute("CREATE TABLE IF NOT EXISTS AayanasTSSongs (track_name TEXT, album_id INTEGER)") 
     
+    # Query the data into 4 parts
+    cur.execute("SELECT COUNT(*) as row_count FROM AayanasTSSongs")
+    row_count = cur.fetchall()[0][0]
+    print(row_count, "rows in AayanasTSRankings")
+    if row_count == 25:
+        newdata = data["items"][25:50]
+    elif row_count == 50:
+        newdata = data["items"][50:75]
+    elif row_count == 75:
+        newdata = data["items"][75:100]
+    elif row_count == 100:
+        print("0 new tracks added to AayanasTSSongs") 
+        return None
+    else:
+        newdata = data["items"][:25]
+
     count = 0
-    for x in range(len(data["items"])):
-        if data["items"][x]["track"]["is_local"] == False: # ignore local files
+    for x in range(len(newdata)):
+        if newdata[x]["track"]["is_local"] == False: # ignore local files
 
-            if "(" in data["items"][x]["track"]["name"]:
-                index = data["items"][x]["track"]["name"].find("(")
-                track_name = (data["items"][x]["track"]["name"])[:index].strip()
+            if "(" in newdata[x]["track"]["name"]:
+                index = newdata[x]["track"]["name"].find("(")
+                track_name = (newdata[x]["track"]["name"])[:index].strip()
             else:
-                track_name = data["items"][x]["track"]["name"]
+                track_name = newdata[x]["track"]["name"]
 
-            if "(" in data["items"][x]["track"]["album"]["name"]:
-                index = data["items"][x]["track"]["album"]["name"].find("(")
-                album_id = (data["items"][x]["track"]["album"]["name"])[:index].strip()
+            if "(" in newdata[x]["track"]["album"]["name"]:
+                index = newdata[x]["track"]["album"]["name"].find("(")
+                album_id = (newdata[x]["track"]["album"]["name"])[:index].strip()
             else:
-                album_id = data["items"][x]["track"]["album"]["name"]
+                album_id = newdata[x]["track"]["album"]["name"]
 
             cur.execute("SELECT id FROM Albums WHERE name = ?", (album_id.lower(), ))
             album_id = cur.fetchone()[0]
@@ -103,7 +118,7 @@ def make_aayana_table(data, cur, conn):
             count += 1
 
     conn.commit() 
-    print(count, "tracks added to AayanasTSSongs") 
+    print(count, "new tracks added to AayanasTSSongs") 
 
 """
 
@@ -118,7 +133,7 @@ def read_website_data():
     page = requests.get(url)
     soup = BeautifulSoup(page.content, "html.parser")
     data = []
-    albums = []
+    album = []
     tracks = []
 
     stags = soup.find_all("strong")
@@ -128,33 +143,104 @@ def read_website_data():
         if song:
             temp = song[0].split("(")
             tracks.append(temp[0].strip())
-            albums.append(temp[1].strip(")"))
+            album.append(temp[1].strip(")"))
     
     for x in range(len(tracks)-1, -1, -1):
-        tup = (tracks[x].lower(), albums[x].lower())
-        data.append(tup)
-
+        if album[x].lower() in albums:
+            tup = (tracks[x].lower(), album[x].lower())
+            data.append(tup)
+    #print(len(data))
     return data
 
 def make_website_table(data, cur, conn):
-    cur.execute("DROP TABLE IF EXISTS WebsiteRankings") 
     cur.execute("CREATE TABLE IF NOT EXISTS WebsiteRankings (track_name TEXT, album_id INTEGER)") 
 
-    count = 0
-    
-    for pair in data:
-        track_name = pair[0]
-        album_id = pair[1]
+    cur.execute("SELECT COUNT(*) as row_count FROM WebsiteRankings")
+    row_count = cur.fetchall()[0][0]
+    print(row_count, "rows in WebsiteRankings")
+    if row_count < 25 and row_count >= 0:
+        newdata = data[row_count:25]
+    elif row_count < 50 and row_count >= 25:
+        newdata = data[row_count:50]
+    elif row_count < 75 and row_count >= 50:
+        newdata = data[row_count:75]
+    elif row_count < 100 and row_count >= 75:
+        newdata = data[row_count:100]
+    else:
+        print("0 new tracks added to WebsiteRankings") 
+        return None
 
-        for item in albums:
-            if item.lower() in album_id:
-                cur.execute("SELECT id FROM Albums WHERE name = ?", (album_id,))
-                album_id = cur.fetchall()
-                if album_id: # we're just looking at top 100
-                    cur.execute("INSERT OR IGNORE INTO WebsiteRankings (track_name, album_id) VALUES (?, ?)", (track_name.lower(), album_id[0][0]))
-                    count += 1
+    count = 0
+    limit = 0
+
+    while limit < 25:
+        for pair in newdata:
+            track_name = pair[0]
+            album_id = pair[1]
+
+            for item in albums:
+                if item.lower() in album_id:
+                    cur.execute("SELECT id FROM Albums WHERE name = ?", (album_id,))
+                    album_id = cur.fetchall()
+                    if album_id:
+                        cur.execute("INSERT OR IGNORE INTO WebsiteRankings (track_name, album_id) VALUES (?, ?)", (track_name.lower(), album_id[0][0]))
+                        count += 1
+            limit += 1
     
-    print(count, "songs added to WebsiteRankings")
+    print(count, "new songs added to WebsiteRankings")
+    
+    conn.commit()
+
+def make_discography_table(data, cur, conn):
+    cur.execute("CREATE TABLE IF NOT EXISTS Discography (track_name TEXT, album_id INTEGER)") 
+
+    cur.execute("SELECT COUNT(*) as row_count FROM Discography")
+
+    limit = 25
+
+    row_count = cur.fetchall()[0][0]
+    print(row_count, "rows in Discography")
+    if row_count < 25 and row_count >= 0:
+        newdata = data[row_count:25]
+    elif row_count < 50 and row_count >= 25:
+        newdata = data[row_count:50]
+    elif row_count < 75 and row_count >= 50:
+        newdata = data[row_count:75]
+    elif row_count < 100 and row_count >= 75:
+        newdata = data[row_count:100]
+    elif row_count < 125 and row_count >= 100:
+        newdata = data[row_count:125]
+    elif row_count < 150 and row_count >= 125:
+        newdata = data[row_count:150]
+    elif row_count < 175 and row_count >= 150:
+        newdata = data[row_count:175]
+    elif row_count < 200 and row_count >= 175:
+        newdata = data[row_count:200]
+    elif row_count < 201 and row_count >= 200:
+        newdata = data[row_count:]
+        limit = 201 - row_count
+    else:
+        print("0 new tracks added to Discography") 
+        return None
+
+    count = 0
+    i = 0
+
+    while i < limit:
+        for pair in newdata:
+            track_name = pair[0]
+            album_id = pair[1]
+
+            for item in albums:
+                if item.lower() in album_id:
+                    cur.execute("SELECT id FROM Albums WHERE name = ?", (album_id,))
+                    album_id = cur.fetchall()
+                    if album_id:
+                        cur.execute("INSERT OR IGNORE INTO Discography (track_name, album_id) VALUES (?, ?)", (track_name.lower(), album_id[0][0]))
+                        count += 1
+            i += 1
+    
+    print(count, "new songs added to Discography")
     
     conn.commit()
 
@@ -167,36 +253,57 @@ Extra Credit API
 """
 
 def read_lastfm_data():
-    r = requests.get("https://ws.audioscrobbler.com/2.0/?method=artist.gettoptracks&artist=Taylor+Swift&api_key=" + LASTFM_API_key + "&limit=150&format=json")
+    r = requests.get("https://ws.audioscrobbler.com/2.0/?method=artist.gettoptracks&artist=Taylor+Swift&api_key=" + LASTFM_API_key + "&limit=200&format=json")
     data = r.json()
+
     return data
 
 def make_last_fm_table(data, cur, conn):
-    cur.execute("DROP TABLE IF EXISTS LastfmRankings") 
-    cur.execute("CREATE TABLE IF NOT EXISTS LastfmRankings (track_name TEXT, playcount INTEGER, album_id INTEGER)") 
+    cur.execute("CREATE TABLE IF NOT EXISTS LastfmRankings (track_name TEXT UNIQUE, playcount INTEGER, album_id INTEGER)") 
+    
+    cur.execute("SELECT COUNT(*) as row_count FROM LastfmRankings")
+    row_count = cur.fetchall()[0][0]
+    print(row_count, "rows in LastfmRankings")
+    if row_count < 25 and row_count >= 0:
+        newdata =data["toptracks"]["track"][row_count:25]
+    elif row_count < 50 and row_count >= 25:
+        newdata = data["toptracks"]["track"][row_count:50]
+    elif row_count < 75 and row_count >= 50:
+        newdata = data["toptracks"]["track"][row_count:75]
+    elif row_count < 100 and row_count >= 75:
+        newdata = data["toptracks"]["track"][row_count:100]
+    else:
+        print("0 new tracks added to LastfmRankings") 
+        return None
 
     count = 0
+    limit = 0
+    
+    while limit < 25:
+        for song in newdata:
 
-    for song in data["toptracks"]["track"]:
+            if "(" in song["name"]:
+                index = song["name"].find("(")
+                track_name = (song["name"].lower())[:index].strip()
+            else:
+                track_name = song["name"].lower()
+            
+            playcount = song["playcount"]
 
-        if "(" in song["name"]:
-            index = song["name"].find("(")
-            track_name = (song["name"].lower())[:index].strip()
-        else:
-            track_name = song["name"].lower()
-        
-        playcount = song["playcount"]
-        album_id = ""
-
-        cur.execute("SELECT album_id FROM WebsiteRankings WHERE track_name = ?", (track_name,))
-        album_id = cur.fetchall()
-        if album_id:
-            cur.execute("INSERT OR IGNORE INTO LastfmRankings (track_name, playcount, album_id) VALUES (?, ?, ?)", (track_name.lower(), playcount, album_id[0][0]))
+            cur.execute("SELECT album_id FROM WebsiteRankings WHERE track_name = ?", (track_name,))
+            album_id = cur.fetchall()
+            if album_id:
+                cur.execute("INSERT OR IGNORE INTO LastfmRankings (track_name, playcount, album_id) VALUES (?, ?, ?)", (track_name.lower(), playcount, album_id[0][0]))
+            else:
+                cur.execute("INSERT OR IGNORE INTO LastfmRankings (track_name, playcount, album_id) VALUES (?, ?, ?)", (track_name.lower(), playcount, 10))
+            
             count += 1
+            limit += 1
+            #print((track_name.lower(), playcount, album_id[0][0]))
         
         #print(track_name, playcount)
     
-    print(count, "songs added to LastfmRankings")
+    print(count, "new songs added to LastfmRankings")
 
 
 
@@ -213,7 +320,8 @@ def main():
     make_albums_table(cur, conn)
     make_aayana_table(spotify_data, cur, conn)
     make_website_table(website_data, cur, conn)
-    make_last_fm_table(lastfm_data, cur, conn)
+    make_discography_table(website_data, cur, conn)
+    #make_last_fm_table(lastfm_data, cur, conn)
 
 
 main()
