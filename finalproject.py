@@ -12,10 +12,11 @@ SPOTIFY_CLIENT_SECRET = 'bb1b23ffebfc46cb863f28d9a410fedd'
 LASTFM_API_key = '6580d4a5940a4714ed0990d3bc4083a2'
 LASTFM_Shared_secret = '10f7e2fc26589318d0adad5a4c612e55'
 
-albums = ["taylor swift", "fearless", "speak now",
-    "red", "1989", "reputation", "lover",
-    "folklore",
-    "evermore", "midnights", "no album"]
+albums = ["taylor swift", "fearless", "fearless (taylor's version)", "speak now",
+    "speak now (deluxe edition)",
+    "red", "red (taylor's version)", "1989", "1989 (deluxe edition)", "reputation", "lover",
+    "folklore", "folklore (deluxe edition)",
+    "evermore", "evermore (deluxe edition)", "midnights", "midnights (3am edition)", "no album"]
 
 def open_database(db_name):
     path = os.path.dirname(os.path.abspath(__file__))
@@ -97,20 +98,25 @@ def make_aayana_table(data, cur, conn):
     for x in range(len(newdata)):
         if newdata[x]["track"]["is_local"] == False: # ignore local files
 
-            if "(" in newdata[x]["track"]["name"]:
+            '''if "(" in newdata[x]["track"]["name"]:
                 index = newdata[x]["track"]["name"].find("(")
                 track_name = (newdata[x]["track"]["name"])[:index].strip()
             else:
-                track_name = newdata[x]["track"]["name"]
+                track_name = newdata[x]["track"]["name"]'''
+            track_name = newdata[x]["track"]["name"]
 
-            if "(" in newdata[x]["track"]["album"]["name"]:
-                index = newdata[x]["track"]["album"]["name"].find("(")
+            if "(deluxe edition)" in newdata[x]["track"]["album"]["name"]:
+                index = newdata[x]["track"]["album"]["name"].find("(deluxe edition)")
+                album_id = (newdata[x]["track"]["album"]["name"])[:index].strip()
+            elif "(3am edition)" in newdata[x]["track"]["album"]["name"]:
+                index = newdata[x]["track"]["album"]["name"].find("(3am edition)")
                 album_id = (newdata[x]["track"]["album"]["name"])[:index].strip()
             else:
                 album_id = newdata[x]["track"]["album"]["name"]
 
             cur.execute("SELECT id FROM Albums WHERE name = ?", (album_id.lower(), ))
             album_id = cur.fetchone()[0]
+            #print(album_id)
 
             cur.execute("INSERT OR IGNORE INTO AayanasTSSongs (track_name, album_id) VALUES (?,?)", (track_name.lower(), album_id))
 
@@ -144,6 +150,7 @@ def read_website_data():
             temp = song[0].split("(")
             tracks.append(temp[0].strip())
             album.append(temp[1].strip(")"))
+            #print(song)
     
     for x in range(len(tracks)-1, -1, -1):
         if album[x].lower() in albums:
@@ -180,8 +187,9 @@ def make_website_table(data, cur, conn):
 
             for item in albums:
                 if item.lower() in album_id:
-                    cur.execute("SELECT id FROM Albums WHERE name = ?", (album_id,))
+                    cur.execute("SELECT name, id FROM Albums WHERE name = ?", (album_id,))
                     album_id = cur.fetchall()
+                    #print(album_id)
                     if album_id:
                         cur.execute("INSERT OR IGNORE INTO WebsiteRankings (track_name, album_id) VALUES (?, ?)", (track_name.lower(), album_id[0][0]))
                         count += 1
@@ -282,28 +290,30 @@ def make_last_fm_table(data, cur, conn):
 
     count = 0
     i = 0
-    print(len(newdata))
     
     while i < len(newdata):
         for song in newdata:
 
+            playcount = song["playcount"]
+            
             if "(" in song["name"]:
+
                 index = song["name"].find("(")
                 track_name = (song["name"].lower())[:index].strip()
+
             else:
+
                 track_name = song["name"].lower()
 
-            playcount = song["playcount"]
+            #track_name = song["name"].lower()
             #print(track_name, playcount)
 
             cur.execute("SELECT album_id FROM Discography WHERE track_name = ?", (track_name,))
             album_id = cur.fetchall()
-            print(album_id)
             if album_id:
-                cur.execute("INSERT OR IGNORE INTO LastfmRankings (track_name, playcount, album_id) VALUES (?, ?, ?)", (track_name.lower(), playcount, album_id[0][0]))
-                #count += 1
+                cur.execute("INSERT OR IGNORE INTO LastfmRankings (track_name, playcount, album_id) VALUES (?, ?, ?)", (song["name"].lower(), playcount, album_id[0][0]))
             else:
-                cur.execute("INSERT OR IGNORE INTO LastfmRankings (track_name, playcount, album_id) VALUES (?, ?, ?)", (track_name.lower(), playcount, 10))
+                cur.execute("INSERT OR IGNORE INTO LastfmRankings (track_name, playcount, album_id) VALUES (?, ?, ?)", (song["name"].lower(), playcount, 17))
             
             count += 1
             #print((track_name.lower(), playcount, album_id[0][0]))
@@ -329,7 +339,7 @@ def main():
     make_albums_table(cur, conn)
     make_aayana_table(spotify_data, cur, conn)
     make_website_table(website_data, cur, conn)
-    make_discography_table(website_data, cur, conn)
+    make_discography_table(website_data, cur, conn) # there is ONE duplicate generated -- trying to fix it
     make_last_fm_table(lastfm_data, cur, conn)
 
 
