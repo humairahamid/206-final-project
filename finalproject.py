@@ -5,6 +5,8 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import re
+import plotly.graph_objects as go
+import plotly.express as px
 
 SPOTIFY_CLIENT_ID = '9a39ed37594746adb22fd7d21861d0d7'
 SPOTIFY_CLIENT_SECRET = 'bb1b23ffebfc46cb863f28d9a410fedd'
@@ -354,16 +356,102 @@ def make_last_fm_table(data, cur, conn):
     conn.commit()
 
 
-def main():
+def execute_query(query):
     cur, conn = open_database('music.db')
-    make_albums_table(cur, conn)
+    cur.execute(query)
+    return cur.fetchall()
 
-    song_data = read_spotify_data("1GVezl4vnm9QuMQs5Wg3oa")
-    website_data = read_website_data()
-    lastfm_data = read_lastfm_data()
 
-    make_aayana_table(song_data, cur, conn)
-    make_website_table(website_data, cur, conn)
-    make_last_fm_table(lastfm_data, cur, conn)
+
+def main():
+    # cur, conn = open_database('music.db')
+    # make_albums_table(cur, conn)
+
+    # song_data = read_spotify_data("1GVezl4vnm9QuMQs5Wg3oa")
+    # website_data = read_website_data()
+    # lastfm_data = read_lastfm_data()
+
+    # make_aayana_table(song_data, cur, conn)
+    # make_website_table(website_data, cur, conn)
+    # make_last_fm_table(lastfm_data, cur, conn)
+
+    mean_album_aayana = int(execute_query("SELECT ROUND(AVG(AayanasTSSongs.album_id)) FROM AayanasTSSongs")[0][0])
+    mean_album_aayana_name = execute_query(f"SELECT Albums.name FROM Albums WHERE Albums.id={mean_album_aayana}")[0][0]
+    mean_album_aayana_name_count = execute_query(f"SELECT Albums.name, COUNT(AayanasTSSongs.track_name) AS album_count FROM AayanasTSSongs INNER JOIN Albums ON AayanasTSSongs.album_id=Albums.id GROUP BY album_id HAVING album_id={mean_album_aayana}")[0][1]
+    most_listened_album_aayana_name, most_listened_album_aayana_count = execute_query("SELECT Albums.name, COUNT(AayanasTSSongs.track_name) AS album_count FROM AayanasTSSongs INNER JOIN Albums ON AayanasTSSongs.album_id=Albums.id GROUP BY album_id ORDER BY album_count DESC")[0]
+    tuplist = execute_query("SELECT Albums.name, COUNT(AayanasTSSongs.track_name) AS album_count FROM AayanasTSSongs INNER JOIN Albums ON AayanasTSSongs.album_id=Albums.id GROUP BY album_id ORDER BY album_count DESC")
+    xlist = []
+    ylist = []
+    for tup in tuplist:
+        xlist.append(tup[0])
+        ylist.append(tup[1])
+    print(ylist)
+    print(xlist)
+    fig = go.Figure(
+        data=[go.Pie(labels=xlist, values=ylist)], 
+        layout=dict(title=dict(text="Album Titles vs Number of Listens - Aayana"))
+    )
+    fig.show()
+
+
+
+    tuplistwebsite = execute_query("SELECT Albums.name, COUNT(WebsiteRankings.track_name) AS album_count FROM WebsiteRankings INNER JOIN Albums ON WebsiteRankings.album_id=Albums.id GROUP BY album_id ORDER BY album_count DESC")
+    print(tuplistwebsite)
+    xlistwebsite = []
+    ylistwebsite = []
+    for tup in tuplistwebsite:
+        xlistwebsite.append(tup[0])
+        ylistwebsite.append(tup[1])
+    print(ylistwebsite)
+    print(xlistwebsite)
+
+
+    fig = go.Figure(
+        data=[go.Pie(labels=xlistwebsite, values=ylistwebsite)], 
+    
+        layout=dict(title=dict(text="Album Title vs Number of Listens ~ Website Ranking"))
+    )
+    fig.show()
+
+
+    result = execute_query("select artist_name, count(artist_name) as artist_count from LastfmCharts group by artist_name order by artist_count")
+    print(result)
+    xlist_lastfm = []
+    ylist_lastfm = []
+    for tup in result:
+        xlist_lastfm.append(tup[0])
+        ylist_lastfm.append(tup[1])
+
+    
+    fig = go.Figure(
+        data=[go.Bar(x=xlist_lastfm, y=ylist_lastfm)], 
+    
+        layout=dict(title=dict(text="Frequency of Arists on LASTFM Chart"))
+    )
+    fig.show()
+
+
+       
+    # fig = go.Figure(
+    #     data=[go.Bar(x=[f"{mean_album_aayana_name} (mean album)", f"{most_listened_album_aayana_name} (most listened to album)"], y=[mean_album_aayana_name_count, most_listened_album_aayana_count])], 
+    #     layout=dict(title=dict(text="Mean Album and Most Listened to Album vs Counts"))
+    # )
+
+    # fig.show()
+   
+
+    # fig = go.Figure(
+    #     data=[go.Bar(x=xlist, y= ylist)], 
+    #     layout=dict(title=dict(text="Album Title vs Number of listens"))
+    # )
+    # fig.show()
+   
+    # fig = go.Figure(
+    #     data=[go.Bar(x=[f"{mean_album_aayana_name} (mean album)", f"{most_listened_album_aayana_name} (most listened to album)"], y=[mean_album_aayana_name_count, most_listened_album_aayana_count])], 
+    #     layout=dict(title=dict(text="Mean Album and Most Listened to Album vs Counts"))
+    # )
+
+    # fig.show()
+   
 
 main()
